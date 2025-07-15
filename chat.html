@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bike Bot Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 600px;
+            height: 80vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: #4a90e2;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .message.user {
+            background: #4a90e2;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+
+        .message.bot {
+            background: #f1f3f5;
+            color: #333;
+            align-self: flex-start;
+            border: 1px solid #e9ecef;
+        }
+
+        .message.loading {
+            background: #f8f9fa;
+            color: #6c757d;
+            font-style: italic;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .chat-input:focus {
+            border-color: #4a90e2;
+        }
+
+        .send-button {
+            padding: 12px 24px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 80px;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background: #357abd;
+            transform: translateY(-1px);
+        }
+
+        .send-button:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            border-radius: 18px;
+            padding: 12px 16px;
+            align-self: flex-start;
+            max-width: 80%;
+        }
+
+        /* Scrollbar styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            Bike Bot Assistant
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                Hello! I'm your bike assistant. How can I help you today?
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input 
+                type="text" 
+                class="chat-input" 
+                id="messageInput" 
+                placeholder="Type your message here..."
+                maxlength="1000"
+            >
+            <button class="send-button" id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        class ChatInterface {
+            constructor() {
+                this.messagesContainer = document.getElementById('chatMessages');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                
+                // API configuration - update this with your actual API endpoint
+                this.apiEndpoint = '/api/chat'; // Change this to your REST API endpoint
+                
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                // Send button click
+                this.sendButton.addEventListener('click', () => {
+                    this.sendMessage();
+                });
+
+                // Enter key press
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendMessage();
+                    }
+                });
+
+                // Auto-resize input and prevent empty messages
+                this.messageInput.addEventListener('input', () => {
+                    const message = this.messageInput.value.trim();
+                    this.sendButton.disabled = message.length === 0;
+                });
+            }
+
+            async sendMessage() {
+                const message = this.messageInput.value.trim();
+                
+                if (!message) {
+                    return;
+                }
+
+                // Add user message to chat
+                this.addMessage(message, 'user');
+                
+                // Clear input and disable send button
+                this.messageInput.value = '';
+                this.sendButton.disabled = true;
+                
+                // Show loading message
+                const loadingMessageId = this.addMessage('Thinking...', 'loading');
+                
+                try {
+                    // Send request to API
+                    const response = await this.callAPI(message);
+                    
+                    // Remove loading message
+                    this.removeMessage(loadingMessageId);
+                    
+                    // Add bot response
+                    this.addMessage(response, 'bot');
+                    
+                } catch (error) {
+                    console.error('API Error:', error);
+                    
+                    // Remove loading message
+                    this.removeMessage(loadingMessageId);
+                    
+                    // Show error message
+                    this.addErrorMessage('Sorry, I encountered an error. Please try again.');
+                }
+            }
+
+            async callAPI(message) {
+                const response = await fetch(this.apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Assuming the API returns a response in the format: { response: "..." }
+                // Adjust this based on your actual API response format
+                return data.response || data.message || 'No response received';
+            }
+
+            addMessage(content, type) {
+                const messageElement = document.createElement('div');
+                const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
+                messageElement.id = messageId;
+                messageElement.className = `message ${type}`;
+                messageElement.textContent = content;
+                
+                this.messagesContainer.appendChild(messageElement);
+                this.scrollToBottom();
+                
+                return messageId;
+            }
+
+            addErrorMessage(content) {
+                const messageElement = document.createElement('div');
+                messageElement.className = 'error-message';
+                messageElement.textContent = content;
+                
+                this.messagesContainer.appendChild(messageElement);
+                this.scrollToBottom();
+            }
+
+            removeMessage(messageId) {
+                const messageElement = document.getElementById(messageId);
+                if (messageElement) {
+                    messageElement.remove();
+                }
+            }
+
+            scrollToBottom() {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+        }
+
+        // Initialize the chat interface when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChatInterface();
+        });
+
+        // For demo purposes - you can remove this section
+        // This simulates an API response when no real API is available
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '') {
+            // Override the callAPI method for demo purposes
+            ChatInterface.prototype.callAPI = async function(message) {
+                // Simulate API delay
+                await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 2000));
+                
+                // Simulate different responses based on message content
+                const responses = [
+                    "Thanks for your message! This is a simulated response.",
+                    "I understand you're asking about: " + message,
+                    "That's an interesting question. Here's what I think...",
+                    "I'm here to help with bike-related questions!",
+                    "Let me think about that for a moment. Based on your message, I'd suggest..."
+                ];
+                
+                return responses[Math.floor(Math.random() * responses.length)];
+            };
+        }
+    </script>
+</body>
+</html>
